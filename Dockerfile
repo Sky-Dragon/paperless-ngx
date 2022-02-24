@@ -8,6 +8,13 @@ RUN git clone https://github.com/agl/jbig2enc .
 RUN ./autogen.sh
 RUN ./configure && make
 
+FROM ubuntu:20.04 AS qpdf
+
+RUN apt-get update && apt-get install -y software-properties-common
+RUN add-apt-repository -y ppa:qpdf/qpdf
+RUN apt-get update && apt-get install -y libqpdf-dev
+
+
 FROM python:3.9-slim-bullseye
 
 # Binary dependencies
@@ -53,6 +60,10 @@ COPY --from=jbig2enc /usr/src/jbig2enc/src/.libs/libjbig2enc* /usr/local/lib/
 COPY --from=jbig2enc /usr/src/jbig2enc/src/jbig2 /usr/local/bin/
 COPY --from=jbig2enc /usr/src/jbig2enc/src/*.h /usr/local/include/
 
+# Copy qpdf
+COPY --from=qpdf /usr/include/qpdf /usr/include/qpdf
+COPY --from=qpdf /usr/lib/*-linux-gnu/libqpdf.so.* /qpdf-libs
+
 WORKDIR /usr/src/paperless/src/
 
 COPY requirements.txt ../
@@ -62,10 +73,10 @@ RUN apt-get update \
   && apt-get -y --no-install-recommends install \
 		build-essential \
 		libpq-dev \
-		libqpdf-dev \
+	&& cp /qpdf-libs/* /usr/lib/*-linux-gnu/ \
 	&& python3 -m pip install --default-timeout=1000 --upgrade --no-cache-dir supervisor \
   && python3 -m pip install --default-timeout=1000 --no-cache-dir -r ../requirements.txt \
-	&& apt-get -y purge build-essential libqpdf-dev \
+	&& apt-get -y purge build-essential \
 	&& apt-get -y autoremove --purge \
 	&& rm -rf /var/lib/apt/lists/*
 
